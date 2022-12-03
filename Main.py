@@ -28,9 +28,8 @@ plt.imshow(reMap2D, interpolation='nearest')
 plt.show()
 
 #%% Plot PSD
-freqs, psd = signal.welch(BroadBandData[:,0])
-plt.figure(figsize=(5, 4))
-plt.semilogx(freqs, psd)
+freqs, psd = signal.welch(BroadBandData[:,0], 1000, nperseg=2048)
+plt.plot(freqs[0:300], psd[0:300])
 plt.title('PSD: power spectral density')
 plt.xlabel('Frequency')
 plt.ylabel('Power')
