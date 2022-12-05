@@ -18,3 +18,11 @@ freq_range = [2, 40]
 
 # Report: fit the model, print the resulting parameters, and plot the reconstruction
 fm.report(freqs, spectrum, freq_range)
+plt.show()
+
+# Alternatively, just fit the model with FOOOF.fit() (without printing anything)
+
+
+# After fitting, plotting and parameter fitting can be called independently:
+# fm.print_results()
+# fm.plot()

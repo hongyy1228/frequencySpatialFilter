@@ -41,4 +41,5 @@ plt.show()
 
 #%% fitting fooof, fitting oscilations and 1/f
 fm = fooof.FOOOFGroup()
-fm.fit(freqs, psd)
+freq_range = [0.5, 40]
+fm.report(freqs, psd, freq_range)
