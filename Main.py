@@ -3,7 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 from scipy import signal
-import fooof
+from fooof import FOOOF
+import ssd
+fm = FOOOF()
 
 #%% Read Data
 #mat_data = mat73.loadmat("H:/bravo1/20221107/GangulyServer/Robot3DArrow/103555/BCI_Fixed/Data0001.mat")
@@ -30,8 +32,8 @@ plt.imshow(reMap2D, interpolation='nearest')
 plt.show()
 
 #%% Plot PSD
-freqs, psd = signal.welch(BroadBandData[:,0], 1000, nperseg=2048)
-plt.plot(freqs, psd)
+freqs_mat, psd_mat = signal.welch(BroadBandData[:,0], 1000, nperseg=2096)
+plt.plot(freqs_mat, psd_mat)
 plt.title('PSD: power spectral density')
 plt.xlabel('Frequency')
 plt.ylabel('Power')
@@ -39,7 +41,17 @@ plt.tight_layout()
 plt.xlim([0,40])
 plt.show()
 
-#%% fitting fooof, fitting oscilations and 1/f
-fm = fooof.FOOOFGroup()
-freq_range = [0.5, 40]
-fm.report(freqs, psd, freq_range)
+#%%
+# Set the frequency range to fit the model
+freq_range = [0, 50]
+
+# Report: fit the model, print the resulting parameters, and plot the reconstruction
+fm.report(freqs_mat, psd_mat, freq_range)
+plt.show()
+
+#%% ssd calculation
+bin_width = 0.5
+peak = 8.82
+nr_components = 3
+
+filters, patterns = ssd.run_ssd(BroadBandData, peak, bin_width)
