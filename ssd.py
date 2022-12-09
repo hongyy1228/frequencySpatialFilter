@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import eig
 from scipy import signal
 
-def run_ssd(raw, peak, band_width):
+def run_ssd(BroadBandData, peak, band_width):
     """Wrapper for compute_ssd with standard settings for definining filters.
 
     Parameters
@@ -26,12 +26,12 @@ def run_ssd(raw, peak, band_width):
     noise_bp = [peak - (band_width + 2), peak + (band_width + 2)]
     noise_bs = [peak - (band_width + 1), peak + (band_width + 1)]
 
-    filters, patterns = compute_ssd(raw, signal_bp, noise_bp, noise_bs)
+    filters, patterns = compute_ssd(BroadBandData, signal_bp, noise_bp, noise_bs)
 
     return filters, patterns
 
 
-def compute_ssd(raw, signal_bp, noise_bp, noise_bs):
+def compute_ssd(BroadBandData, signal_bp, noise_bp, noise_bs):
     """Compute SSD for a specific peak frequency.
 
     Parameters
@@ -59,19 +59,115 @@ def compute_ssd(raw, signal_bp, noise_bp, noise_bs):
 
 
     # bandpass filter for signal
-    b, a = signal.iirfilter(2, [signal_bp[0], signal_bp[1]], fs=1000, btype='band', ftype='butter')
-    raw_signal = signal.lfilter(b, a, raw)
+    sfreq = 1000
+    iir_params = dict(order=2, ftype='butter', output='sos')
+    l_freq = signal_bp[0],
+    h_freq = signal_bp[1],
+
+    kind = 'bandstop'
+    ftype = 'butter'
+    output = iir_params.get('output', 'sos')
+    l_stop, h_stop = l_freq, h_freq
+    f_pass = [l_freq, h_freq]
+    f_stop = [l_freq, h_freq]
+
+    btype = 'bandpass'
+    f_pass = np.atleast_1d(f_pass)
+    Wp = f_pass / (float(sfreq) / 2)
+    output = 'sos'
+
+    kwargs = dict(N=iir_params['order'], Wn=Wp, btype=btype,
+                  ftype=ftype, output=output)
+    for key in ('rp', 'rs'):
+        if key in iir_params:
+            kwargs[key] = iir_params[key]
+    system = signal.iirfilter(**kwargs)
+    cutoffs = signal.sosfreqz(system, worN=Wp * np.pi)[1]
+
+    max_try = 100000
+
+    kind = 'sos'
+    sos = system
+    zi = [[0.] * 2] * len(sos)
+
+    n_per_chunk = 1000
+    n_chunks_max = int(np.ceil(max_try / float(n_per_chunk)))
+    x = np.zeros(n_per_chunk)
+    x[0] = 1
+    last_good = n_per_chunk
+    thresh_val = 0
+
+    for ii in range(n_chunks_max):
+        h, zi = signal.sosfilt(sos, x, zi=zi)
+        x[0] = 0  # for subsequent iterations we want zero input
+        h = np.abs(h)
+        thresh_val = max(0.001 * np.max(h), thresh_val)
+        idx = np.where(np.abs(h) > thresh_val)[0]
+        if len(idx) > 0:
+            last_good = idx[-1]
+        else:  # this iteration had no sufficiently lange values
+            idx = (ii - 1) * n_per_chunk + last_good
+            break
+
+    padlen = idx
+    iir_params.update(dict(padlen=padlen))
+    iir_params.update(sos=system)
 
 # Bandpass, l_stop, h_stop = l_freq, h_freq
-    raw_signal = raw.copy().filter(
-        l_freq=signal_bp[0],
-        h_freq=signal_bp[1],
-        method="iir",
-        iir_params=iir_params,
-        verbose=False,
-    )
+    raw_signal = signal.sosfilt(iir_params['sos'], BroadBandData)
 
     # bandpass filter
+    l_freq = signal_bp[0],
+    h_freq = signal_bp[1],
+
+    kind = 'bandstop'
+    ftype = 'butter'
+    output = iir_params.get('output', 'sos')
+    l_stop, h_stop = l_freq, h_freq
+    f_pass = [l_freq, h_freq]
+    f_stop = [l_freq, h_freq]
+
+    btype = 'bandpass'
+    f_pass = np.atleast_1d(f_pass)
+    Wp = f_pass / (float(sfreq) / 2)
+    output = 'sos'
+
+    kwargs = dict(N=iir_params['order'], Wn=Wp, btype=btype,
+                  ftype=ftype, output=output)
+    for key in ('rp', 'rs'):
+        if key in iir_params:
+            kwargs[key] = iir_params[key]
+    system = signal.iirfilter(**kwargs)
+    cutoffs = signal.sosfreqz(system, worN=Wp * np.pi)[1]
+
+    max_try = 100000
+
+    kind = 'sos'
+    sos = system
+    zi = [[0.] * 2] * len(sos)
+
+    n_per_chunk = 1000
+    n_chunks_max = int(np.ceil(max_try / float(n_per_chunk)))
+    x = np.zeros(n_per_chunk)
+    x[0] = 1
+    last_good = n_per_chunk
+    thresh_val = 0
+
+    for ii in range(n_chunks_max):
+        h, zi = signal.sosfilt(sos, x, zi=zi)
+        x[0] = 0  # for subsequent iterations we want zero input
+        h = np.abs(h)
+        thresh_val = max(0.001 * np.max(h), thresh_val)
+        idx = np.where(np.abs(h) > thresh_val)[0]
+        if len(idx) > 0:
+            last_good = idx[-1]
+        else:  # this iteration had no sufficiently lange values
+            idx = (ii - 1) * n_per_chunk + last_good
+            break
+
+    padlen = idx
+    iir_params.update(dict(padlen=padlen))
+    iir_params.update(sos=system)
     raw_noise = raw.copy().filter(
         l_freq=noise_bp[0],
         h_freq=noise_bp[1],
