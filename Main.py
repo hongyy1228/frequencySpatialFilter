@@ -8,9 +8,9 @@ import ssd
 fm = FOOOF()
 
 #%% Read Data
-#mat_data = mat73.loadmat("H:/bravo1/20221107/GangulyServer/Robot3DArrow/103555/BCI_Fixed/Data0001.mat")
+mat_data = mat73.loadmat("H:/bravo1/20221107/GangulyServer/Robot3DArrow/103555/BCI_Fixed/Data0001.mat")
 # for mac
-mat_data = mat73.loadmat('/Users/hongyy/Documents/B1/20221025/GangulyServer/20221025/Robot3DArrow/100256/BCI_Fixed/Data0001.mat')
+#mat_data = mat73.loadmat('/Users/hongyy/Documents/B1/20221025/GangulyServer/20221025/Robot3DArrow/100256/BCI_Fixed/Data0001.mat')
 
 #%% Read Broadband Data
 BroadBandData = mat_data['TrialData']['BroadbandData']
@@ -50,8 +50,27 @@ fm.report(freqs_mat, psd_mat, freq_range)
 plt.show()
 
 #%% ssd calculation
-bin_width = 0.5
+band_width = 0.5
 peak = 8.82
 nr_components = 3
 
-filters, patterns = ssd.run_ssd(BroadBandData, peak, bin_width)
+filters, patterns = ssd.run_ssd(BroadBandData, peak, band_width)
+
+raw_ssd = ssd.apply_filters(BroadBandData, filters)
+
+#%% see SSD component
+freqs_mat, psd_mat = signal.welch(components[0,:], 1000, nperseg=2096)
+plt.plot(freqs_mat, psd_mat)
+plt.title('PSD: power spectral density')
+plt.xlabel('Frequency')
+plt.ylabel('Power')
+plt.tight_layout()
+plt.xlim([0,40])
+plt.show()
+
+# Set the frequency range to fit the model
+freq_range = [0, 50]
+
+# Report: fit the model, print the resulting parameters, and plot the reconstruction
+fm.report(freqs_mat, psd_mat, freq_range)
+plt.show()

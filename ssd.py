@@ -117,8 +117,8 @@ def compute_ssd(BroadBandData, signal_bp, noise_bp, noise_bs):
     raw_signal = signal.sosfilt(iir_params['sos'], BroadBandData)
 
     # bandpass filter
-    l_freq = signal_bp[0],
-    h_freq = signal_bp[1],
+    l_freq = noise_bp[0]
+    h_freq = noise_bp[1]
 
     kind = 'bandstop'
     ftype = 'butter'
@@ -168,27 +168,59 @@ def compute_ssd(BroadBandData, signal_bp, noise_bp, noise_bs):
     padlen = idx
     iir_params.update(dict(padlen=padlen))
     iir_params.update(sos=system)
-    raw_noise = raw.copy().filter(
-        l_freq=noise_bp[0],
-        h_freq=noise_bp[1],
-        method="iir",
-        iir_params=iir_params,
-        verbose=False,
-    )
+    raw_noise = signal.sosfilt(iir_params['sos'], BroadBandData)
 
-    # bandstop filter
-    raw_noise = raw_noise.filter(
-        l_freq=noise_bs[1],
-        h_freq=noise_bs[0],
-        method="iir",
-        iir_params=iir_params,
-        verbose=False,
-    )
+    l_freq = noise_bs[1]
+    h_freq = noise_bs[0]
+
+    ftype = 'butter'
+    l_stop, h_stop = l_freq, h_freq
+    btype = 'bandpass'
+    f_pass = np.atleast_1d(f_pass)
+    Wp = f_pass / (float(sfreq) / 2)
+    output = 'sos'
+
+    kwargs = dict(N=iir_params['order'], Wn=Wp, btype=btype,
+                  ftype=ftype, output=output)
+    for key in ('rp', 'rs'):
+        if key in iir_params:
+            kwargs[key] = iir_params[key]
+    system = signal.iirfilter(**kwargs)
+
+    sos = system
+    zi = [[0.] * 2] * len(sos)
+
+    n_per_chunk = 1000
+    n_chunks_max = int(np.ceil(max_try / float(n_per_chunk)))
+    x = np.zeros(n_per_chunk)
+    x[0] = 1
+    last_good = n_per_chunk
+    thresh_val = 0
+
+    for ii in range(n_chunks_max):
+        h, zi = signal.sosfilt(sos, x, zi=zi)
+        x[0] = 0  # for subsequent iterations we want zero input
+        h = np.abs(h)
+        thresh_val = max(0.001 * np.max(h), thresh_val)
+        idx = np.where(np.abs(h) > thresh_val)[0]
+        if len(idx) > 0:
+            last_good = idx[-1]
+        else:  # this iteration had no sufficiently lange values
+            idx = (ii - 1) * n_per_chunk + last_good
+            break
+
+    padlen = idx
+    iir_params.update(dict(padlen=padlen))
+    iir_params.update(sos=system)
+    raw_noise = signal.sosfilt(iir_params['sos'], raw_noise)
+
+
+
 
     # compute covariance matrices for signal and noise contributions
 
-    cov_signal = np.cov(raw_signal._data)
-    cov_noise = np.cov(raw_noise._data)
+    cov_signal = np.cov(raw_signal.T)
+    cov_noise = np.cov(raw_noise.T)
 
     # compute spatial filters
     filters = compute_ged(cov_signal, cov_noise)
@@ -247,7 +279,7 @@ def compute_ged(cov_signal, cov_noise):
     return filters
 
 
-def apply_filters(raw, filters, prefix="ssd"):
+def apply_filters(BroadBandData, filters, prefix="ssd"):
     """Apply spatial filters on continuous data.
 
     Parameters
@@ -266,17 +298,10 @@ def apply_filters(raw, filters, prefix="ssd"):
         Raw instance with projected signals as traces.
     """
 
-    raw_projected = raw.copy()
-    components = filters.T @ raw.get_data()
-    nr_components = filters.shape[1]
-    raw_projected._data = components
 
-    ssd_channels = ["%s%i" % (prefix, i + 1) for i in range(nr_components)]
-    mapping = dict(zip(raw.info["ch_names"], ssd_channels))
-    mne.channels.rename_channels(raw_projected.info, mapping)
-    raw_projected.drop_channels(raw_projected.info["ch_names"][nr_components:])
+    components = filters.T @ BroadBandData.T
 
-    return raw_projected
+    return components
 
 
 def compute_patterns(cov_signal, filters):
