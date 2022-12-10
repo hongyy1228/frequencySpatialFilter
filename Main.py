@@ -56,7 +56,7 @@ nr_components = 3
 
 filters, patterns = ssd.run_ssd(BroadBandData, peak, band_width)
 
-raw_ssd = ssd.apply_filters(BroadBandData, filters)
+components = ssd.apply_filters(BroadBandData, filters)
 
 #%% see SSD component
 freqs_mat, psd_mat = signal.welch(components[0,:], 1000, nperseg=2096)
